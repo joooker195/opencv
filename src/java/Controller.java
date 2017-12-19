@@ -111,6 +111,7 @@ public class Controller
         // Видеопоток доступен?
         if (this.capture.isOpened()) {
             try {
+                //Определяем цвет по цветовому тону и выводим его на экран.
                 double[] sampleColor = getSampleColor(capture, WIDTH, HEIGHT);
                 double h = sampleColor[0];
                 String colorName = "";
@@ -155,18 +156,14 @@ public class Controller
 
                 // Если кадр не пуст - обработать его
                 if (!frame.empty()) {
-                    Mat blurredImage = new Mat();
                     Mat hsvImage = new Mat();
 
 
-                    // Сконвертировать кадр в HSV
+                    // Сконвертировать кадр
                     Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2GRAY);
 
                     // Удалить шум
                     Imgproc.blur(hsv, hsvImage, new Size(7, 7));
-
-                   /* Scalar minValues = new Scalar(12 , 149,255);
-                    Scalar maxValues = new Scalar(205,250,255);*/
 
 
                     // Порог для HSV изображения для поиска шара
@@ -190,60 +187,59 @@ public class Controller
      * Найти и обозначить контуры на изображении
      */
     private Mat findAndDrawBalls(Mat maskedImage, Mat frame) {
-      //  List<MatOfPoint> contours = new ArrayList<>();
-        //Mat hierarchy = new Mat();
-
         Mat hierarchy = new Mat();
-        Size ksize  = new Size(5, 5);
-        List<MatOfPoint> contours = new Vector<MatOfPoint>();
+        List<MatOfPoint> contours = new Vector<>();
         double contourArea, maxArea = 0;
         MatOfPoint biggestContour = null;
-        MatOfPoint2f contours2f = new MatOfPoint2f();
         Point center = new Point();
         float[] radius = new float[1];
-        MatOfByte buffer = new MatOfByte();
 
         contours.clear();
         Imgproc.findContours(maskedImage, contours, hierarchy,
                 Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
         //Среди найденных контуров ищем контур наибольшего размера.
-        for (MatOfPoint contour : contours) {
+       /* for (MatOfPoint contour : contours) {
             contourArea = Imgproc.contourArea(contour);
             if (contourArea > maxArea) {
                 biggestContour = contour;
                 maxArea = contourArea;
             }
-        }
+        }*/
 
-        /*double saveArea = 0;
+        double saveArea = 0;
+        MatOfPoint[] bc = new MatOfPoint[3];
+        double[] max = new double[3];
         for(int i=0;i<3 ;i++)
         {
-            for (MatOfPoint contour : contours) {
-                contourArea = Imgproc.contourArea(contour);
+            for (int j=0; j< contours.size(); j++) {
+                contourArea = Imgproc.contourArea(contours.get(j));
                 if (contourArea > maxArea) {
-                    biggestContour = contour;
-                    maxArea = contourArea;
+                    bc[i] = contours.get(j);
+                    max[i] = contourArea;
+                    contours.remove(j);
                 }
             }
+
         }
-        */
 
-        System.out.println("max area = "+maxArea);
 
-        if (biggestContour != null && maxArea >= 3000 && maxArea<=7000) {
-            Rect rect = Imgproc.boundingRect(biggestContour);
-            center.x = rect.x + rect.width / 2;
-            center.y = rect.y + rect.height / 2;
-            radius[0] = Math.max(rect.width, rect.height) / 2;
+        for(int i=0; i<3; i++) {
+            System.out.println("max area = "+max[i]);
+            if (bc[i] != null && max[i] >= 3000 && max[i] <= 7000) {
+                Rect rect = Imgproc.boundingRect(bc[i]);
+                center.x = rect.x + rect.width / 2;
+                center.y = rect.y + rect.height / 2;
+                radius[0] = Math.max(rect.width, rect.height) / 2;
 
-            contours.clear();
-            contours.add(biggestContour);
-            //Рисуем найденный контур на кадре.
-            Imgproc.drawContours(frame, contours, 0, BLUE);
-            //Рисуем найденный круг на кадре(если это круг).
-            if(Math.abs(rect.height - rect.width)<=50) {
-                Imgproc.circle(frame, center, (int) radius[0], RED);
+                contours.clear();
+                contours.add(bc[i]);
+                //Рисуем найденный контур на кадре.
+                Imgproc.drawContours(frame, contours, 0, BLUE);
+                //Рисуем найденный круг на кадре(если это круг).
+                if (Math.abs(rect.height - rect.width) <= 50) {
+                    Imgproc.circle(frame, center, (int) radius[0], RED);
+                }
             }
         }
         return frame;
