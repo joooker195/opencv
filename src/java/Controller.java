@@ -22,6 +22,8 @@ public class Controller
     @FXML
     private ImageView maskImage;
 
+    String colorName = "";
+
 
 
     //Задаём ширину и высоту кадра, с которым будем работать.
@@ -107,144 +109,51 @@ public class Controller
      */
     private Mat grabFrame() {
         Mat frame = new Mat();
+        Mat gray = new Mat();
+        Mat mask = new Mat();
+        Mat circles = new Mat();
 
-        // Видеопоток доступен?
-        if (this.capture.isOpened()) {
-            try {
-                //Определяем цвет по цветовому тону и выводим его на экран.
-                double[] sampleColor = getSampleColor(capture, WIDTH, HEIGHT);
-                double h = sampleColor[0];
-                String colorName = "";
-                if (h < 22)
-                    colorName = "orange";
-                else if (h < 38)
-                    colorName = "yellow";
-                else if (h < 75)
-                    colorName = "green";
-                else if (h < 130)
-                    colorName = "blue";
-                else if (h < 160)
-                    colorName = "violet";
-                else
-                    colorName = "red";
-                //System.out.println("color name = "+colorName);
-                double hMin = sampleColor[0] - 10;
-                double hMax = sampleColor[0] + 10;
-                if (hMin < 0)
-                    hMin = 0;
-                if (hMax > 179)
-                    hMax = 179;
-                double sMin = sampleColor[1] - 50;
-                double sMax = sampleColor[1] + 50;
-                if (sMin < 0)
-                    sMin = 0;
-                if (sMax > 255)
-                    sMax = 255;
-                double vMin = sampleColor[2] - 50;
-                double vMax = sampleColor[2] + 50;
-                if (vMin < 0)
-                    vMin = 0;
-                if (vMax > 255)
-                    vMax = 255;
-                Scalar minValues = new Scalar(hMin, sMin, vMin);
-                Scalar maxValues = new Scalar(hMax, sMax, vMax);
-
-                Mat hsv = new Mat();
-                Mat mask = new Mat();
-                // Считать текущий кадр
-                this.capture.read(frame);
-
-                // Если кадр не пуст - обработать его
-                if (!frame.empty()) {
-                    Mat hsvImage = new Mat();
+        this.capture.read(frame);
+        Imgproc.cvtColor(frame, gray, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.medianBlur(gray, gray, 5);
+        Imgproc.Canny(gray, mask, 50, 200);
+        Imgproc.HoughCircles(mask, circles, Imgproc.HOUGH_GRADIENT, 1, 120, 100, 30, 0, 0);
+        this.updateImageView(this.maskImage, Utils.mat2Image(mask));
 
 
-                    // Сконвертировать кадр
-                    Imgproc.cvtColor(frame, hsv, Imgproc.COLOR_BGR2GRAY);
+        int x = circles.cols();
+        int y = circles.rows();
 
-                    // Удалить шум
-                    Imgproc.blur(hsv, hsvImage, new Size(7, 7));
-
-
-                    // Порог для HSV изображения для поиска шара
-                    Core.inRange(hsvImage, minValues, maxValues, mask);
-
-                    // Показать маску
-                    this.updateImageView(this.maskImage, Utils.mat2Image(mask));
-
-                    // Найти контура шаров и показать их
-                    frame = this.findAndDrawBalls(mask, frame);
-                }
-            } catch (Exception e) {
-                System.err.print("Ошибка при обработки изображения");
-                e.printStackTrace();
-            }
-        }
-        return frame;
-    }
-
-    /**
-     * Найти и обозначить контуры на изображении
-     */
-    private Mat findAndDrawBalls(Mat maskedImage, Mat frame) {
-        Mat hierarchy = new Mat();
-        List<MatOfPoint> contours = new Vector<>();
+        Point center = new Point();
+        int r = 0;
         double contourArea, maxArea = 0;
         MatOfPoint biggestContour = null;
-        Point center = new Point();
-        float[] radius = new float[1];
 
+        Mat hierarchy = new Mat();
+        List<MatOfPoint> contours = new Vector<>();
         contours.clear();
-        Imgproc.findContours(maskedImage, contours, hierarchy,
+        Imgproc.findContours(mask, contours, hierarchy,
                 Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
-        //Среди найденных контуров ищем контур наибольшего размера.
-       /* for (MatOfPoint contour : contours) {
+
+        for (MatOfPoint contour : contours) {
             contourArea = Imgproc.contourArea(contour);
             if (contourArea > maxArea) {
                 biggestContour = contour;
-                maxArea = contourArea;
-            }
-        }*/
-
-        double saveArea = 0;
-        MatOfPoint[] bc = new MatOfPoint[3];
-        double[] max = new double[3];
-        for(int i=0;i<3 ;i++)
-        {
-            for (int j=0; j< contours.size(); j++) {
-                contourArea = Imgproc.contourArea(contours.get(j));
-                if (contourArea > maxArea) {
-                    bc[i] = contours.get(j);
-                    max[i] = contourArea;
-                    contours.remove(j);
-                }
-            }
-
-        }
-
-
-        for(int i=0; i<3; i++) {
-            System.out.println("max area = "+max[i]);
-            if (bc[i] != null && max[i] >= 3000 && max[i] <= 7000) {
-                Rect rect = Imgproc.boundingRect(bc[i]);
-                center.x = rect.x + rect.width / 2;
-                center.y = rect.y + rect.height / 2;
-                radius[0] = Math.max(rect.width, rect.height) / 2;
-
-                contours.clear();
-                contours.add(bc[i]);
-                //Рисуем найденный контур на кадре.
-                Imgproc.drawContours(frame, contours, 0, BLUE);
-                //Рисуем найденный круг на кадре(если это круг).
-                if (Math.abs(rect.height - rect.width) <= 50) {
-                    Imgproc.circle(frame, center, (int) radius[0], RED);
-                }
             }
         }
+            Rect rect = Imgproc.boundingRect(biggestContour);
+            x = rect.x/2+170;
+            y = rect.y/2+150;
+            r = Math.max(rect.width, rect.height) * 2;
+
+
+        Imgproc.circle(frame, new Point(x, y), 60, new Scalar(0, 255, 0), 2); // draw the outer circle
+        Imgproc.circle(frame, new Point(x, y), 2, new Scalar(0, 0, 255), 3); // draw the center of the circle
+        Imgproc.circle(frame, new Point(x, y), 60, new Scalar(0, 255, 0), 2); // draw the outer circle
+
         return frame;
     }
-
     /**
      * Установка ширины окон в UI
      */
